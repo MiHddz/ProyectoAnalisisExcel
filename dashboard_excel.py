@@ -793,10 +793,10 @@ class Constructor:
             completo = " completo" if tend["completo"] and fk != tend["f1"] else ""
             self.kpis.append({"t": f"Último {tend['gran'].lower()}{completo} vs anterior", "f": f"=IFERROR({u}/{a}-1,0)",
                               "fmt": '▲ 0.0%;▼ 0.0%;0.0%', "delta": True,
-                              "sub": f'=Calculos!$A${fk}&": "&TEXT({u},"#,##0")'})
+                              "sub": f'=Calculos!$A${fk}&": "&FIXED({u},0)'})
         elif rank:
             self.kpis.append({"t": f"{p.cat1} líder", "f": f"=Calculos!$A${rank['f0']}", "fmt": "@",
-                              "sub": f'=TEXT(Calculos!$C${rank["f0"]},"0%")&" del total"'})
+                              "sub": f'=ROUND(Calculos!$C${rank["f0"]}*100,0)&"%"&" del total"'})
         elif p.medida:
             self.kpis.append({"t": f"{p.medida} máximo", "f": f"=MAX({self.col_ref[p.medida]})", "fmt": "k"})
 
@@ -805,7 +805,7 @@ class Constructor:
             self.paneles.append({"titulo": f"Tendencia de {self.nombre_medida}", "ancho": 2,
                                  "sub": f"Total por {tend['gran'].lower()}", "chart": self.chart_tendencia(tend)})
         if rank:
-            sub = f'="Top {min(10, rank["n_total"])} de {rank["n_total"]} · líder: "&Calculos!$A${rank["f0"]}&" ("&TEXT(Calculos!$C${rank["f0"]},"0%")&")"'
+            sub = f'="Top {min(10, rank["n_total"])} de {rank["n_total"]} · líder: "&Calculos!$A${rank["f0"]}&" ("&ROUND(Calculos!$C${rank["f0"]}*100,0)&"%"&")"'
             self.paneles.append({"titulo": f"Ranking por {p.cat1}", "sub": sub, "chart": self.chart_ranking(rank)})
         if dona:
             self.paneles.append({"titulo": f"Participación por {p.cat_dona}",

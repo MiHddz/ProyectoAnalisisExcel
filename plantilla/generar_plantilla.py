@@ -14,6 +14,11 @@ con fórmulas:
 Este script solo hace falta para REGENERAR la plantilla; quien la usa solo necesita Excel.
 
     python plantilla/generar_plantilla.py
+    python plantilla/generar_plantilla.py --valores copia_recalculada.xlsx
+
+Con --valores se guardan dentro de la plantilla los resultados ya calculados (tomados de una copia
+recalculada, por ejemplo con LibreOffice). Así el tablero se ve completo aunque Excel abra el archivo
+en "Vista protegida", que no calcula fórmulas.
 """
 from __future__ import annotations
 
@@ -52,15 +57,20 @@ FMT_N = "#,##0;-#,##0;;"                     # oculta los ceros en etiquetas
 P0, P1 = 40, 40 + NCOLS - 1                  # filas del perfil de columnas en Config
 
 HINTS = {
-    "fecha": ["fecha", "date", "periodo", "hora", "time", "dia", "día"],
+    "fecha": ["fecha", "date", "periodo", "timestamp"],
     "id": [" id ", " id", " cod", " nit ", " cedula", " cédula", " telefono", " teléfono", " celular", " sku",
-           " factura", " numero", " número", " nro", " año ", " ano ", " year", " zip", " postal", " documento"],
+           " factura", " numero", " número", " nro", " año ", " ano ", " year", " zip", " postal", " documento",
+           " guia", " guía", " orden", " cuenta", " pedido", " radicado", " consecutivo", " omr", " pob ", " placa",
+           " referencia", " ref "],
     "med": ["venta", "ingreso", "monto", "importe", "total", "valor", "factur", "revenue", "sales", "amount",
             "utilidad", "ganancia", "gasto"],
+    "qty": ["cantidad", "unidades", "qty", "peso", "kilos", " kg", "volumen", "stock", "existencia", "inventario"],
     "pen": ["precio", "price", "unit", "costo", "cost", "promedio", "tasa", "%", "edad", "calific", "rating",
             "puntaje", "porcentaje", "satisf", "nps", "score", "nota"],
     "cat": ["categor", "region", "región", "producto", "linea", "línea", "segmento", "canal", "ciudad", "tienda",
-            "sucursal", "vendedor", "cliente", "tipo", "marca", "zona", "sede"],
+            "sucursal", "vendedor", "cliente", "tipo", "marca", "zona", "sede", "courier", "transportadora",
+            "oficina", "trayecto", "motivo", "clasifica", "proceso"],
+    "tiempo": [" dias", " días", "tiempo", "demora", "duraci", "lead", " horas"],
     "etapa": ["etapa", "fase", "estado", "stage", "embudo", "funnel", "paso", "status"],
     "depto": ["departamento", "depto", "dpto", "depart"],
     "costo": ["costo", "cost"],
@@ -149,7 +159,8 @@ class Plantilla:
         for r, et, nm, sc in roles:
             ws.cell(r, 2, et).font = _font(10, True)
             rng = f"${sc}${P0}:${sc}${P1}"
-            ws.cell(r, 3, f'=IF(MAX({rng})>0,INDEX($B${P0}:$B${P1},MATCH(MAX({rng}),{rng},0)),"")').font = _font(10, color=INK_2)
+            umbral = 10 if nm == "cMed" else 0
+            ws.cell(r, 3, f'=IF(MAX({rng})>{umbral},INDEX($B${P0}:$B${P1},MATCH(MAX({rng}),{rng},0)),"")').font = _font(10, color=INK_2)
             d = ws.cell(r, 4)
             d.fill = amarillo
             d.font = _font(10)
@@ -178,6 +189,8 @@ class Plantilla:
             (27, "Inicio del primer período",
              '=IF(cFecha=0,"",CHOOSE(gIdx,INT(fMin),INT(fMin)-WEEKDAY(fMin,2)+1,DATE(YEAR(fMin),MONTH(fMin),1),'
              'DATE(YEAR(fMin),3*INT((MONTH(fMin)-1)/3)+1,1),DATE(YEAR(fMin),1,1)))', "tBase", "dd/mm/yyyy"),
+            (29, "Columna de fecha guardada como texto",
+             f'=IF(cFecha>0,"",IFERROR(INDEX($B${P0}:$B${P1},MATCH(TRUE,$S${P0}:$S${P1},0)),""))', "fTexto", None),
             (28, "Índice de agrupación", '=IFERROR(MATCH(gran,{"Día","Semana","Mes","Trimestre","Año"},0),3)', "gIdx", None),
         ]
         ws["B15"] = "Valores calculados"
@@ -199,7 +212,7 @@ class Plantilla:
         ws.cell(P0 - 2, 2, "Perfil automático de columnas (no editar)").font = _font(11, True)
         enc = ["#", "Encabezado", "Celdas", "Numéricas", "¿Fecha?", "¿Número?", "Texto norm.", "¿Texto?",
                "P. medida", "P. categoría", "Distintos (500)", "P. fecha", "P. etapa", "P. depto", "P. costo",
-               "P. medida 2", "P. categoría 2", "P. costo 2"]
+               "P. medida 2", "P. categoría 2", "P. costo 2", "¿Fecha en texto?"]
         for j, h in enumerate(enc, 1):
             c = ws.cell(P0 - 1, j, h)
             c.font = _font(8, True, INK_2)
@@ -214,19 +227,22 @@ class Plantilla:
                 "G": f'=" "&LOWER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(B{r},"_"," "),"-"," "),"."," "))&" "',
                 "E": (f'=AND(C{r}>0,D{r}>=0.9*C{r},OR(LEFT(CELL("format",INDEX(Datos!$A$2:$AN$2,1,{j})),1)="D",'
                       f'{hint(f"G{r}", "fecha")}>0))'),
-                "F": f'=AND(C{r}>0,D{r}>=0.9*C{r},NOT(E{r}),{hint(f"G{r}", "id")}=0)',
+                "F": (f'=AND(C{r}>0,D{r}>=0.9*C{r},NOT(E{r}),{hint(f"G{r}", "id")}=0,'
+                      f'NOT(AND(K{r}>=20,K{r}>=0.95*MIN(500,C{r}),{hint(f"G{r}", "med")}+{hint(f"G{r}", "pen")}'
+                      f'+{hint(f"G{r}", "costo")}+{hint(f"G{r}", "tiempo")}+{hint(f"G{r}", "qty")}=0)))'),
                 "H": f"=AND(C{r}>0,D{r}<0.5*C{r})",
-                "K": (f'=IF(H{r},SUMPRODUCT((INDEX(Datos!$A$2:$AN$501,0,{j})<>"")/'
+                "K": (f'=IF(C{r}>0,SUMPRODUCT((INDEX(Datos!$A$2:$AN$501,0,{j})<>"")/'
                       f'COUNTIF(INDEX(Datos!$A$2:$AN$501,0,{j}),INDEX(Datos!$A$2:$AN$501,0,{j})&"")),0)'),
-                "I": f'=IF(F{r},2+10*{hint(f"G{r}", "med")}-{hint(f"G{r}", "pen")}{peso},0)',
-                "J": f'=IF(AND(H{r},K{r}>=2),IF(K{r}<=40,2+10*{hint(f"G{r}", "cat")},0.5+{hint(f"G{r}", "cat")}){peso},0)',
+                "I": f'=IF(F{r},2+10*{hint(f"G{r}", "med")}+8*{hint(f"G{r}", "qty")}*(1-{hint(f"G{r}", "med")})-{hint(f"G{r}", "pen")}{peso},0)',
+                "J": f'=IF(AND(H{r},K{r}>=2),IF(K{r}<=40,2+10*{hint(f"G{r}", "cat")}+3*AND(K{r}>=4,K{r}<=25),0.5+{hint(f"G{r}", "cat")}){peso},0)',
                 "L": f'=IF(E{r},1+{hint(f"G{r}", "fecha")}{peso},0)',
                 "M": f'=IF(AND(H{r},K{r}>=2,K{r}<=15),{hint(f"G{r}", "etapa")}*(1{peso}),0)',
                 "N": f'=IF(H{r},{hint(f"G{r}", "depto")}*(1{peso}),0)',
                 "O": f'=IF(F{r},{hint(f"G{r}", "costo")}*(1{peso}),0)',
-                "P": f'=IF(B{r}=$E$6,0,I{r})',
+                "P": f'=IF(B{r}=$E$6,0,I{r}+5*{hint(f"G{r}", "tiempo")}*(I{r}>0))',
                 "Q": f'=IF(B{r}=$E$9,0,J{r})',
-                "R": f'=IF(OR(B{r}=$E$6,INDEX($I${P0}:$I${P1},MAX(1,$F$6))<10),0,O{r})',
+                "R": f'=IF(OR(B{r}=$E$6,INDEX($I${P0}:$I${P1},MAX(1,$F$6))<12),0,O{r})',
+                "S": f'=AND(C{r}>0,D{r}<0.5*C{r},{hint(f"G{r}", "fecha")}>0)',
             }
             for col, v in f.items():
                 c = ws[f"{col}{r}"]
@@ -236,7 +252,7 @@ class Plantilla:
                     c.number_format = "0"
                 if col in "IJLMNOPQR":
                     c.number_format = "0.000"
-        for col in "GHIJKLMNOPQR":
+        for col in "GHIJKLMNOPQRS":
             ws.column_dimensions[col].width = 10
         ws.freeze_panes = "A6"
 
@@ -397,8 +413,8 @@ class Plantilla:
         for k in range(1, MAX_DISP + 1):
             r = k + 2
             ok = f"AND(ISNUMBER(INDEX(rMed2,{k})),ISNUMBER(INDEX(rMed,{k})))"
-            ws[f"BX{r}"] = f"=IF(OR(cMed2=0,{k}>nFilas),NA(),IF({ok},INDEX(rMed2,{k}),NA()))"
-            ws[f"BY{r}"] = f"=IF(OR(cMed2=0,{k}>nFilas),NA(),IF({ok},INDEX(rMed,{k}),NA()))"
+            ws[f"BX{r}"] = f"=IF(OR(cMed=0,cMed2=0,{k}>nFilas),NA(),IF({ok},INDEX(rMed2,{k}),NA()))"
+            ws[f"BY{r}"] = f"=IF(OR(cMed=0,cMed2=0,{k}>nFilas),NA(),IF({ok},INDEX(rMed,{k}),NA()))"
 
         # KPIs  CA..CB
         ws["CA1"] = "KPIs"
@@ -413,6 +429,13 @@ class Plantilla:
             ("Costo anterior", f'=IF(OR(cFecha=0,cCosto=0),0,SUMIFS(rCosto,{",".join(f"{a},{b}" for a, b in entre(ant, ini))}))'),
             ("Mes anterior", f'=IF(cFecha=0,"",{mes(ini)}&" "&RIGHT(YEAR({ini}),2)&" vs "&{mes(ant)}&" "&RIGHT(YEAR({ant}),2))'),
             ("Margen total", '=IF(OR(cCosto=0,cMed=0),"",IFERROR((SUM(rMed)-SUM(rCosto))/SUM(rMed),""))'),
+            ("Prom2 total", '=IF(cMed2=0,"",IFERROR(AVERAGE(rMed2),""))'),
+            ("Prom2 actual", f'=IF(OR(cMed2=0,cFecha=0),0,IFERROR(AVERAGEIFS(rMed2,{",".join(f"{a},{b}" for a, b in entre(ini, fin))}),0))'),
+            ("Prom2 anterior", f'=IF(OR(cMed2=0,cFecha=0),0,IFERROR(AVERAGEIFS(rMed2,{",".join(f"{a},{b}" for a, b in entre(ant, ini))}),0))'),
+            ("Etapa top", f'=IF(cEtapa=0,"",{self.ue["lab"]}3)'),
+            ("Etapa % total", f'=IF(cEtapa=0,"",IFERROR(COUNTIF(rEtapa,{self.ue["lab"]}3)/nFilas,""))'),
+            ("Etapa % actual", f'=IF(OR(cEtapa=0,cFecha=0),0,IFERROR(COUNTIFS(rEtapa,{self.ue["lab"]}3,{",".join(f"{a},{b}" for a, b in entre(ini, fin))})/CB5,0))'),
+            ("Etapa % anterior", f'=IF(OR(cEtapa=0,cFecha=0),0,IFERROR(COUNTIFS(rEtapa,{self.ue["lab"]}3,{",".join(f"{a},{b}" for a, b in entre(ant, ini))})/CB6,0))'),
         ]
         for i, (et, f) in enumerate(kp):
             ws.cell(i + 3, 79, et)
@@ -482,9 +505,11 @@ class Plantilla:
             for c in fila:
                 c.fill = fondo
         ws.row_dimensions[2].height = 30
-        ws["B2"] = '="Dashboard de "&nomMed'
+        ws["B2"] = '=IF(cMed>0,"Dashboard de "&nomMed,"Dashboard de análisis")'
         ws["B2"].font = _font(20, True)
-        ws["B3"] = ('="Pega tus datos en la hoja Datos (encabezados en la fila 1) · "&TEXT(nFilas,"#,##0")&'
+        ws["B3"] = ('=IF(fTexto<>"","⚠ La columna «"&fTexto&"» parece fecha pero está guardada como texto: '
+                    'selecciónala y usa Datos › Texto en columnas › Fecha (DMA).  ","")&'
+                    '"Pega tus datos en la hoja Datos (encabezados en la fila 1) · "&FIXED(nFilas,0)&'
                     '" registros · columnas elegidas en la hoja Config"')
         ws["B3"].font = _font(9, color=INK_2)
         self.kpis()
@@ -517,21 +542,42 @@ class Plantilla:
     def kpis(self):
         ws = self.dash
         k = self.kpi
-        var = lambda a, b, txt: (f'=IF(OR(cFecha=0,N({b})=0),"",IF({a}>={b},"▲ ","▼ ")&'
-                                 f'ROUND(ABS({a}/{b}-1)*100,1)&"% · "&{txt})')
+        mt = k["Mes anterior"]
+
+        def rel(a, b):      # variación relativa
+            return f'IF(OR(cFecha=0,N({b})=0),"",IF({a}>={b},"▲ ","▼ ")&ROUND(ABS({a}/{b}-1)*100,1)&"% · "&{mt})'
+
+        def pp(a, b):       # variación en puntos porcentuales
+            return f'IF(cFecha=0,"",IF({a}>={b},"▲ ","▼ ")&ROUND(ABS({a}-{b})*100,1)&" pp · "&{mt})'
+
+        def kfmt(x):        # número abreviado como texto (respeta el separador decimal del Excel)
+            return (f'IF(ABS({x})>=1000000,FIXED({x}/1000000,1)&"M",IF(ABS({x})>=1000,FIXED({x}/1000,1)&"K",'
+                    f'FIXED({x},IF(ABS({x})<100,1,0))))')
+
         prom_a = f'IFERROR({k["Actual"]}/{k["Filas actual"]},0)'
         prom_b = f'IFERROR({k["Anterior"]}/{k["Filas anterior"]},0)'
         marg_a = f'IFERROR(({k["Actual"]}-{k["Costo actual"]})/{k["Actual"]},0)'
         marg_b = f'IFERROR(({k["Anterior"]}-{k["Costo anterior"]})/{k["Anterior"]},0)'
+        med2 = '"PROMEDIO "&UPPER(Config!$E$7)'
+        etapa = '"% "&UPPER(' + k["Etapa top"] + ')'
+        distintos = 'IF(cCat1>0,UPPER(Config!$E$9)&" DISTINTOS","—")'
+        n_dist = f'IF(cCat1>0,IF(n1>={MAXU},n1&"+",n1&""),"")'
+        pct_etapa = f'ROUND({k["Etapa % total"]}*100,1)&"%"'
+        var_etapa = pp(k["Etapa % actual"], k["Etapa % anterior"])
+        # Con medida: total · registros · promedio · margen / % etapa / distintos
+        # Sin medida (se cuentan registros): registros · promedio medida 2 · % etapa · distintos
         tarjetas = [
-            ('=UPPER(nomMed)&" TOTAL"', "=total", FMT_K, var(k["Actual"], k["Anterior"], k["Mes anterior"])),
-            ('="REGISTROS"', "=nFilas", "#,##0", var(k["Filas actual"], k["Filas anterior"], k["Mes anterior"])),
-            ('="PROMEDIO POR REGISTRO"', "=IFERROR(total/nFilas,0)", FMT_K, var(prom_a, prom_b, k["Mes anterior"])),
-            ('=IF(cCosto>0,"MARGEN",IF(cCat1>0,UPPER($E$9)&" DISTINTOS","—"))'.replace("$E$9", "Config!$E$9"),
-             f'=IF(cCosto>0,ROUND({k["Margen total"]}*100,1)&"%",IF(cCat1>0,IF(n1>={MAXU},n1&"+",n1&""),""))',
-             "@",
-             (f'=IF(OR(cCosto=0,cFecha=0,N({k["Anterior"]})=0),"",IF({marg_a}>={marg_b},"▲ ","▼ ")&'
-              f'ROUND(ABS({marg_a}-{marg_b})*100,1)&" pp · "&{k["Mes anterior"]})')),
+            ('=IF(cMed>0,UPPER(nomMed)&" TOTAL","REGISTROS")', "=total", FMT_K,
+             "=" + rel(k["Actual"], k["Anterior"])),
+            (f'=IF(cMed>0,"REGISTROS",IF(cMed2>0,{med2},IF(cCat2>0,UPPER(Config!$E$10)&" DISTINTOS","—")))',
+             f'=IF(cMed>0,{kfmt("nFilas")},IF(cMed2>0,{kfmt(k["Prom2 total"])},IF(cCat2>0,IF(n2>={MAXU},n2&"+",n2&""),"")))', "@",
+             f'=IF(cMed>0,{rel(k["Filas actual"], k["Filas anterior"])},IF(cMed2>0,{rel(k["Prom2 actual"], k["Prom2 anterior"])},""))'),
+            (f'=IF(cMed>0,"PROMEDIO POR REGISTRO",IF(cEtapa>0,{etapa},"—"))',
+             f'=IF(cMed>0,{kfmt("IFERROR(total/nFilas,0)")},IF(cEtapa>0,{pct_etapa},""))', "@",
+             f'=IF(cMed>0,{rel(prom_a, prom_b)},IF(cEtapa>0,{var_etapa},""))'),
+            (f'=IF(cCosto>0,"MARGEN",IF(AND(cMed>0,cEtapa>0),{etapa},{distintos}))',
+             f'=IF(cCosto>0,ROUND({k["Margen total"]}*100,1)&"%",IF(AND(cMed>0,cEtapa>0),{pct_etapa},{n_dist}))', "@",
+             f'=IF(cCosto>0,IF(cFecha=0,"",{pp(marg_a, marg_b)}),IF(AND(cMed>0,cEtapa>0),{var_etapa},""))'),
         ]
         slots = [(2, 4), (6, 8), (10, 12), (14, 16)]
         for (a, b), (t, v, fmt, d) in zip(slots, tarjetas):
@@ -717,8 +763,8 @@ class Plantilla:
         self.poner(ch, cols, fila, alto, completo)
         return ('="Embudo"&IF(cEtapa>0," por "&Config!$E$11,"")',
                 self.aviso("cEtapa=0", "Elige la columna de Etapa en Config (ej. Visita, Carrito, Compra)",
-                           '"Registros por etapa · conversión total: "&ROUND(IFERROR(LOOKUP(2,1/(Motor!$BU$3:$BU$8<>""),'
-                           'Motor!$BU$3:$BU$8)/Motor!$BU$3,0)*100,1)&"%"'))
+                           '"Registros por etapa, de mayor a menor · la última es el "&ROUND(IFERROR(LOOKUP(2,1/(Motor!$BU$3:$BU$8<>""),'
+                           'Motor!$BU$3:$BU$8)/Motor!$BU$3,0)*100,1)&"% de la primera"'))
 
     def p_dispersion(self, cols, fila, alto, completo):
         ch = ScatterChart()
@@ -736,7 +782,7 @@ class Plantilla:
         ch.y_axis.numFmt = FMT_K
         self.poner(ch, cols, fila, alto, completo)
         return ('="Relación "&nomMed&IF(cMed2>0," vs "&Config!$E$7,"")',
-                self.aviso("cMed2=0", "Necesita dos columnas numéricas (Config)",
+                self.aviso("OR(cMed=0,cMed2=0)", "Necesita dos columnas numéricas: elige Medida principal y secundaria en Config",
                            f'"Eje X: "&Config!$E$7&" · eje Y: "&nomMed&" · hasta {MAX_DISP:,} registros"'))
 
     def p_matriz(self, cols, fila, alto, completo):
@@ -880,5 +926,53 @@ def _horas():
     return base / base.sum()
 
 
+def incrustar_valores(destino: Path, calculado: Path):
+    """Copia los resultados de `calculado` como valores en caché de las fórmulas de `destino`."""
+    import shutil
+    import tempfile
+    import zipfile
+    from openpyxl import load_workbook
+    from lxml import etree
+
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    errores = {"#N/A", "#VALUE!", "#REF!", "#DIV/0!", "#NUM!", "#NAME?", "#NULL!"}
+    origen = load_workbook(calculado, data_only=True)
+    orden = load_workbook(destino, read_only=True).sheetnames
+    tmp = Path(tempfile.mkstemp(suffix=".xlsx")[1])
+    with zipfile.ZipFile(destino) as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.startswith("xl/worksheets/sheet") and item.filename.endswith(".xml"):
+                hoja = origen[orden[int(item.filename[19:-4]) - 1]]
+                raiz = etree.fromstring(data)
+                for c in raiz.iterfind(".//m:c", ns):
+                    if c.find("m:f", ns) is None:
+                        continue
+                    v = hoja[c.get("r")].value
+                    ve = c.find("m:v", ns)
+                    if ve is None:
+                        ve = etree.SubElement(c, f"{{{ns['m']}}}v")
+                    if isinstance(v, bool):
+                        c.set("t", "b"); ve.text = "1" if v else "0"
+                    elif isinstance(v, (int, float)):
+                        c.attrib.pop("t", None); ve.text = repr(float(v)) if isinstance(v, float) else str(v)
+                    elif isinstance(v, datetime):
+                        c.attrib.pop("t", None); ve.text = repr((v - datetime(1899, 12, 30)).total_seconds() / 86400)
+                    elif isinstance(v, str) and v in errores:
+                        c.set("t", "e"); ve.text = v
+                    else:
+                        c.set("t", "str"); ve.text = "" if v is None else str(v)
+                data = etree.tostring(raiz, xml_declaration=True, encoding="UTF-8", standalone=True)
+            zout.writestr(item, data)
+    shutil.move(tmp, destino)
+
+
 if __name__ == "__main__":
-    print("Plantilla creada:", Plantilla().construir())
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--valores", help="Copia ya recalculada de la plantilla para guardar sus resultados en caché")
+    a = ap.parse_args()
+    salida = Plantilla().construir()
+    if a.valores:
+        incrustar_valores(salida, Path(a.valores))
+    print("Plantilla creada:", salida)

@@ -39,11 +39,27 @@ Visualizaciones incluidas:
 Si a tus datos les falta algo (por ejemplo, no hay fecha), ese panel muestra un aviso ⚠ que dice
 qué columna elegir en **Config**, y el resto del tablero sigue funcionando.
 
+**Bases sin dinero (envíos, tickets, encuestas, inventarios de registros):** si ninguna columna parece
+ventas, monto, valor o cantidad, la plantilla **cuenta registros** en lugar de sumar. Nunca suma columnas
+como `GUIA`, `ORDEN`, `CUENTA`, `CEDULA` o `TELEFONO`. Por ejemplo, en una base de mensajería las tarjetas
+muestran: registros (guías), promedio de `DIAS ENTREGA`, % del estado más común (por ejemplo, `% ENTREGADO`)
+y productos distintos. El embudo usa la columna `ESTADO` y el mapa usa `DEPARTAMENTO` (en mayúsculas,
+sin tildes o con tildes).
+
+**Si algo sale en blanco:**
+- Archivo descargado: haz clic en **Habilitar edición** (barra amarilla). La plantilla trae los resultados
+  del ejemplo guardados, pero con tus datos Excel necesita calcular.
+- Fechas guardadas como texto: arriba del tablero aparece un aviso ⚠ con el nombre de la columna. Selecciónala
+  y usa **Datos › Texto en columnas › Siguiente › Siguiente › Fecha: DMA › Finalizar**.
+- Cálculo manual: en **Fórmulas › Opciones para el cálculo** elige **Automático** (o presiona Ctrl+Alt+F9).
+
 Límites de la plantilla: analiza hasta 40 columnas; en cada categoría busca hasta 40 valores distintos
 (10 en el ranking); la dispersión usa los primeros 5.000 registros. Si tu base tiene cientos de miles de filas,
 puede tardar unos segundos en recalcular: para esos casos usa el generador en Python.
 
-Para regenerar la plantilla después de modificar su diseño: `python plantilla/generar_plantilla.py`.
+Para regenerar la plantilla después de modificar su diseño: `python plantilla/generar_plantilla.py`. Con
+`--valores copia_recalculada.xlsx` se guardan los resultados calculados dentro del archivo (para que se vea completa
+en Vista protegida).
 
 ## Generador en Python
 
