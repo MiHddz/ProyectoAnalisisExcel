@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+~$*.xlsx
+*_dashboard.xlsx
+!ejemplos/ventas_dashboard.xlsx
