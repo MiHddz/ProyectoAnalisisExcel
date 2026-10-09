@@ -53,3 +53,13 @@ def test_sin_datos_utiles(tmp_path):
     ruta.write_text("Nota\n" + "\n".join(f"texto único {i}" for i in range(100)), encoding="utf-8")
     with pytest.raises(ValueError):
         generar_dashboard(ruta, tmp_path / "o.xlsx")
+
+
+def test_plantilla_se_genera(tmp_path):
+    sys.path.insert(0, str(RAIZ / "plantilla"))
+    from generar_plantilla import Plantilla
+    salida = Plantilla().construir(tmp_path / "p.xlsx")
+    wb = load_workbook(salida)
+    assert wb.sheetnames == ["Dashboard", "Datos", "Config", "Motor"]
+    assert len(wb["Dashboard"]._charts) == 7          # línea, 2 rankings, dona, apiladas, embudo, dispersión
+    assert {"rMed", "rFecha", "cCat1", "nFilas"} <= set(wb.defined_names)

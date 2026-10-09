@@ -1,5 +1,52 @@
 # Proyecto Análisis Excel: dashboard automático
 
+Hay dos formas de usarlo:
+
+| | **Plantilla de Excel** (sin instalar nada) | **Generador en Python** |
+|---|---|---|
+| Archivo | `plantilla/Plantilla_Dashboard.xlsx` | `dashboard_excel.py` |
+| Requiere | Solo Excel 2010 o superior (recomendado Microsoft 365) | Python + `pip install` |
+| Cómo se usa | Pegas tus datos en la hoja **Datos** | `python dashboard_excel.py archivo.xlsx` |
+| Ideal para | Uso diario con bases pequeñas y medianas | Archivos grandes, reportes con títulos y totales |
+
+## Plantilla de Excel (sin instalar nada)
+
+1. Descarga `plantilla/Plantilla_Dashboard.xlsx` desde GitHub (abre el archivo y usa el botón **Download raw file**).
+2. Ábrela en Excel. Si aparece "Habilitar edición", haz clic. **No tiene macros**.
+3. Ve a la hoja **Datos**, presiona **Ctrl+A** y luego **Supr** para borrar el ejemplo.
+4. Pega tu base de datos desde la celda **A1** (encabezados en la fila 1, un registro por fila).
+5. Vuelve a la hoja **Dashboard**: todo se recalcula solo.
+
+La hoja **Config** muestra qué columna eligió para cada cosa (medida, fecha, categorías, etapa,
+departamento, costo). Si quieres otra, escógela en la lista desplegable amarilla. Para volver a la
+detección automática, borra la celda amarilla.
+
+Visualizaciones incluidas:
+
+| Visualización | Qué muestra |
+|---|---|
+| Tarjetas KPI | Total, registros, promedio y margen (o valores distintos), con ▲/▼ frente al mes anterior |
+| Líneas | Tendencia; se agrupa sola por día, semana, mes, trimestre o año según el rango de fechas |
+| Barras horizontales | Ranking top 10 de la categoría principal y de la secundaria |
+| Dona | Participación: top 5 + "Otros" (usa la categoría con menos valores) |
+| Barras apiladas | Últimos 12 meses divididos por categoría |
+| Matriz (tipo tabla dinámica) | Categoría × últimos 6 meses, con color según el valor y total con barras de datos |
+| Mapa | Mosaico de los 33 departamentos de Colombia (acepta nombres con o sin tildes) + top 5 |
+| Mapa de calor | Hora × día de la semana (o mes × día si la fecha no tiene hora) |
+| Dispersión | Relación entre las dos medidas numéricas |
+| Embudo | Registros por etapa (ej. Visita → Carrito → Pago → Compra) con conversión total |
+
+Si a tus datos les falta algo (por ejemplo, no hay fecha), ese panel muestra un aviso ⚠ que dice
+qué columna elegir en **Config**, y el resto del tablero sigue funcionando.
+
+Límites de la plantilla: analiza hasta 40 columnas; en cada categoría busca hasta 40 valores distintos
+(10 en el ranking); la dispersión usa los primeros 5.000 registros. Si tu base tiene cientos de miles de filas,
+puede tardar unos segundos en recalcular: para esos casos usa el generador en Python.
+
+Para regenerar la plantilla después de modificar su diseño: `python plantilla/generar_plantilla.py`.
+
+## Generador en Python
+
 Convierte **cualquier** archivo de datos (Excel o CSV) en un dashboard de Excel con
 gráficas de análisis modernas, sin configurar nada.
 
